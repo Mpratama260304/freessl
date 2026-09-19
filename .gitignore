@@ -1,0 +1,12 @@
+node_modules/
+.next/
+out/
+.env*
+!.env.example
+data/
+*.pem
+*.key
+*.tsbuildinfo
+playwright-report/
+test-results/
+coverage/

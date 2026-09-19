@@ -1,0 +1,81 @@
+services:
+  app:
+    build: .
+    init: true
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      NODE_ENV: production
+      REDIS_URL: redis://redis:6379
+      ACME_DATA_DIR: /app/data/acme
+      TRUST_PROXY: "true"
+    volumes:
+      - acme_data:/app/data/acme
+    expose:
+      - "3000"
+    depends_on:
+      redis:
+        condition: service_healthy
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
+
+  redis:
+    image: redis:7.4-alpine
+    restart: unless-stopped
+    command: [redis-server, --appendonly, "yes", --maxmemory, 256mb, --maxmemory-policy, noeviction]
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: [CMD, redis-cli, ping]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    security_opt:
+      - no-new-privileges:true
+
+  nginx:
+    image: nginx:1.28-alpine
+    restart: unless-stopped
+    ports:
+      - "${HTTP_PORT:-80}:80"
+      - "${HTTPS_PORT:-443}:443"
+    volumes:
+      - ./deploy/nginx.conf:/opt/certlane/http.conf:ro
+      - ./deploy/nginx-tls.conf:/opt/certlane/tls.conf:ro
+      - ./deploy/nginx-start.sh:/docker-entrypoint.d/40-certlane.sh:ro
+      - tls_data:/etc/letsencrypt:ro
+      - tls_challenges:/var/www/acme:ro
+    entrypoint: [sh, -c, "sh /docker-entrypoint.d/40-certlane.sh && exec nginx -g 'daemon off;'"]
+    depends_on:
+      app:
+        condition: service_healthy
+    healthcheck:
+      test: [CMD-SHELL, "wget -q -O /dev/null http://127.0.0.1/nginx-health || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    security_opt:
+      - no-new-privileges:true
+
+  certbot:
+    image: certbot/certbot:v4.2.0
+    profiles: [tls]
+    env_file: .env
+    entrypoint: [sh, /opt/certlane/certbot.sh]
+    volumes:
+      - ./deploy/certbot.sh:/opt/certlane/certbot.sh:ro
+      - tls_data:/etc/letsencrypt
+      - tls_challenges:/var/www/acme
+
+volumes:
+  acme_data:
+  redis_data:
+  tls_data:
+  tls_challenges:

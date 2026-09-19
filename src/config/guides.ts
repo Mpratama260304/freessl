@@ -1,0 +1,40 @@
+export interface GuideStep { title: string; text: string; code?: string }
+export interface Guide { slug: string; name: string; category: string; description: string; steps: GuideStep[] }
+
+export const guides: Guide[] = [
+  { slug: "nginx", name: "Nginx", category: "Web server", description: "Install your full chain and key, validate the configuration, and reload safely.", steps: [
+    { title: "Place your certificate files", text: "Upload fullchain.pem and privkey.pem to a restricted directory. Replace example.com with your own domain in every path and configuration.", code: "sudo install -d -m 700 /etc/nginx/ssl/example.com\nsudo install -m 600 privkey.pem /etc/nginx/ssl/example.com/privkey.pem\nsudo install -m 644 fullchain.pem /etc/nginx/ssl/example.com/fullchain.pem" },
+    { title: "Configure HTTPS", text: "Merge these directives into the existing virtual host. Preserve your application's location blocks and document root. Confirm that port 443 is open.", code: "server {\n    listen 443 ssl;\n    server_name example.com www.example.com;\n\n    ssl_certificate /etc/nginx/ssl/example.com/fullchain.pem;\n    ssl_certificate_key /etc/nginx/ssl/example.com/privkey.pem;\n    ssl_protocols TLSv1.2 TLSv1.3;\n\n    root /var/www/example.com;\n    index index.html;\n}" },
+    { title: "Test and reload", text: "Reload only after the configuration test succeeds. Add an HTTP-to-HTTPS redirect after HTTPS works, and schedule renewal before the actual certificate expiration.", code: "sudo nginx -t && sudo systemctl reload nginx" },
+  ] },
+  { slug: "apache", name: "Apache", category: "Web server", description: "Enable TLS for an Apache virtual host with the appropriate certificate chain.", steps: [
+    { title: "Store the files securely", text: "Place the key and certificate files in a restricted server directory. On Debian/Ubuntu, enable mod_ssl with a2enmod ssl; other distributions package it differently.", code: "sudo install -d -m 700 /etc/apache2/ssl/example.com\nsudo install -m 600 privkey.pem /etc/apache2/ssl/example.com/privkey.pem\nsudo install -m 644 fullchain.pem /etc/apache2/ssl/example.com/fullchain.pem\nsudo a2enmod ssl" },
+    { title: "Update your virtual host", text: "Apache 2.4.8 and newer accepts the full chain in SSLCertificateFile. On older versions, use cert.pem there and specify chain.pem with SSLCertificateChainFile. Retain your existing document root and access rules.", code: "<VirtualHost *:443>\n    ServerName example.com\n    ServerAlias www.example.com\n    DocumentRoot /var/www/example.com\n    SSLEngine on\n    SSLCertificateFile /etc/apache2/ssl/example.com/fullchain.pem\n    SSLCertificateKeyFile /etc/apache2/ssl/example.com/privkey.pem\n    SSLProtocol -all +TLSv1.2 +TLSv1.3\n</VirtualHost>" },
+    { title: "Validate and reload", text: "Ensure the virtual host is enabled and Apache listens on 443. Service names may be httpd on Red Hat-based distributions.", code: "sudo apachectl configtest && sudo systemctl reload apache2" },
+  ] },
+  { slug: "cpanel", name: "cPanel", category: "Hosting panel", description: "Install a certificate using the hosting panel's SSL/TLS controls.", steps: [
+    { title: "Open your hosting panel", text: "In cPanel, open Security, then SSL/TLS. Choose Manage SSL sites under Install and Manage SSL for your site. This is your hosting provider's panel, not an account with this certificate service." },
+    { title: "Select the domain and paste the files", text: "Paste cert.pem into Certificate (CRT), privkey.pem into Private Key (KEY), and chain.pem into Certificate Authority Bundle (CABUNDLE). Include the BEGIN and END lines. Select the matching domain." },
+    { title: "Install and check", text: "Choose Install Certificate, then check https://your-domain in a browser and use the SSL Checker. Panel availability depends on your hosting plan. Configure renewal with your host if available." },
+  ] },
+  { slug: "hestiacp", name: "HestiaCP", category: "Hosting panel", description: "Use a custom SSL certificate for an existing Hestia web domain.", steps: [
+    { title: "Edit the web domain", text: "Open Web in HestiaCP, select your domain, and choose Edit. Enable SSL support. For a manually generated certificate, do not select Hestia's separate automatic Let's Encrypt issuance option." },
+    { title: "Add certificate, key and authority", text: "Paste cert.pem into SSL Certificate, privkey.pem into SSL Key, and chain.pem into SSL Certificate Authority / Intermediate. Labels vary by Hestia version. Do not omit the chain." },
+    { title: "Save and verify", text: "Save the domain settings and check the HTTPS endpoint. Enable HTTPS redirection after successful verification. Imported certificates must be renewed manually unless you move to Hestia's built-in ACME automation." },
+  ] },
+  { slug: "cloudpanel", name: "CloudPanel", category: "Hosting panel", description: "Import a custom certificate and its matching private key into CloudPanel.", steps: [
+    { title: "Open SSL/TLS settings", text: "Select the site in CloudPanel and open SSL/TLS. Use Actions, then Import Certificate. The exact menu placement may differ by version." },
+    { title: "Import the full chain", text: "Paste privkey.pem into the private key field and fullchain.pem into the certificate field. If the panel has a separate chain field, use cert.pem for the certificate and chain.pem for the chain." },
+    { title: "Verify the installation", text: "Import, then inspect the HTTPS endpoint and expiry date. Keep a renewal reminder; a manually imported certificate is not automatically renewed by this service." },
+  ] },
+  { slug: "nodejs", name: "Node.js", category: "Application", description: "Terminate TLS in Node.js or use a reverse proxy for your application.", steps: [
+    { title: "Choose where TLS terminates", text: "A reverse proxy such as Nginx is usually easier to operate in production. For direct Node.js TLS, store certificates outside the public directory and give the runtime user read-only access to the key." },
+    { title: "Create an HTTPS server", text: "Pass your application's request handler instead of the minimal handler below. The configured port must be exposed or forwarded appropriately. Do not run Node as root merely to bind port 443.", code: "import https from 'node:https';\nimport { readFileSync } from 'node:fs';\n\nconst server = https.createServer({\n  key: readFileSync('/run/secrets/privkey.pem'),\n  cert: readFileSync('/run/secrets/fullchain.pem'),\n  minVersion: 'TLSv1.2',\n}, (request, response) => {\n  response.writeHead(200, { 'Content-Type': 'text/plain' });\n  response.end('Secure connection');\n});\n\nserver.listen(8443, '0.0.0.0');" },
+    { title: "Plan certificate reloads", text: "After renewal, restart gracefully or update the secure context with the new matching certificate and key. Never place private keys in source control, container images, logs, or static assets." },
+  ] },
+  { slug: "docker", name: "Docker", category: "Infrastructure", description: "Mount certificate files read-only into an Nginx TLS terminator.", steps: [
+    { title: "Keep secrets outside your image", text: "Create a certs directory on the host, restrict private-key permissions, and place fullchain.pem and privkey.pem there. Add this directory to your ignore files. Never COPY private keys into a Docker image." },
+    { title: "Mount files read-only", text: "This Compose service terminates TLS. Prepare nginx.conf using the Nginx guide and point it to /etc/nginx/certs/fullchain.pem and /etc/nginx/certs/privkey.pem. Add an upstream application as needed.", code: "services:\n  web:\n    image: nginx:stable-alpine\n    restart: unless-stopped\n    ports:\n      - '443:443'\n    volumes:\n      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro\n      - ./certs:/etc/nginx/certs:ro" },
+    { title: "Reload after renewal", text: "Validate configuration before reloading. Replacing files inside the bind-mounted directory lets Nginx read the updated certificate without rebuilding the image.", code: "docker compose exec web nginx -t\ndocker compose exec web nginx -s reload" },
+  ] },
+];
