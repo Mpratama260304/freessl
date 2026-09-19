@@ -1,4 +1,4 @@
-# Certlane
+# FreeSSL
 
 A no-login SSL certificate service using only Let's Encrypt ACME v2. Visitors generate an ECDSA P-256 or RSA 2048 key and CSR in their browser, prove domain ownership with DNS-01 or HTTP-01, and download the resulting PEM files or ZIP. Wildcards require DNS; multi-domain requests default to ten names.
 
