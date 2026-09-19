@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { loadConfig } from "../src/config/env";
-import { site, pageMetadata } from "../src/config/site";
+import { site, pageMetadata, getSiteUrl } from "../src/config/site";
 
 test("FreeSSL branding is shared by the logo and social metadata", () => {
   assert.equal(site.name, "FreeSSL");
@@ -19,4 +19,19 @@ test("defaults to Let's Encrypt staging and never accepts other CAs", () => {
   assert.throws(() => loadConfig({ ACME_ENVIRONMENT: "production" }));
   assert.equal(loadConfig({ ACME_ENVIRONMENT: "production", SITE_URL: "https://ssl.example.com", RATE_LIMIT_SECRET: "a".repeat(32) }).directoryUrl, "https://acme-v02.api.letsencrypt.org/directory");
   assert.throws(() => loadConfig({ MAX_DOMAINS_PER_CERT: "0" }));
+});
+
+test("production defaults to the public FreeSSL origin and honors an explicit SITE_URL", () => {
+  const scenarios = [
+    { input: {}, origin: "http://localhost:3000" },
+    { input: { NODE_ENV: "production" }, origin: "https://freessl.run" },
+    { input: { NODE_ENV: "development" }, origin: "http://localhost:3000" },
+    { input: { NODE_ENV: "test" }, origin: "http://localhost:3000" },
+    { input: { NODE_ENV: "production", SITE_URL: "https://ssl.example.com" }, origin: "https://ssl.example.com" },
+  ];
+  for (const { input, origin } of scenarios) {
+    assert.equal(loadConfig(input).SITE_URL, origin);
+    assert.equal(getSiteUrl(input), origin);
+  }
+  assert.equal(loadConfig({ NODE_ENV: "production" }).ACME_ENVIRONMENT, "staging");
 });

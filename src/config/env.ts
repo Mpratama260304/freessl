@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { getSiteUrl } from "./site";
 
 const schema = z.object({
   ACME_ENVIRONMENT: z.enum(["staging", "production"]).default("staging"),
@@ -6,7 +7,7 @@ const schema = z.object({
   ACME_TERMS_AGREED: z.enum(["true", "false"]).default("false"),
   ACME_DATA_DIR: z.string().default("./data/acme"),
   REDIS_URL: z.url().default("redis://127.0.0.1:6379"),
-  SITE_URL: z.url().default("http://localhost:3000"),
+  SITE_URL: z.url(),
   ORDER_TTL_SECONDS: z.coerce.number().int().min(60).max(3600).default(1800),
   MAX_DOMAINS_PER_CERT: z.coerce.number().int().min(1).max(100).default(10),
   MAX_ORDER_PER_IP_PER_HOUR: z.coerce.number().int().min(1).max(100).default(5),
@@ -16,7 +17,10 @@ const schema = z.object({
 });
 
 export function loadConfig(input: Record<string, string | undefined> = process.env) {
-  const parsed = schema.parse(input);
+  const parsed = schema.parse({
+    ...input,
+    SITE_URL: getSiteUrl(input),
+  });
   const site = new URL(parsed.SITE_URL);
   if (!["http:", "https:"].includes(site.protocol) || site.username || site.password || site.pathname !== "/") throw new Error("SITE_URL must be an HTTP(S) origin.");
   if (parsed.ACME_ENVIRONMENT === "production" && (site.protocol !== "https:" || !parsed.RATE_LIMIT_SECRET)) throw new Error("Production issuance requires HTTPS and RATE_LIMIT_SECRET.");

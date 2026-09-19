@@ -63,7 +63,7 @@ Copy `.env.example` to `.env` for Docker deployment and replace its example valu
 | Variable | Purpose / default |
 | --- | --- |
 | `NODE_ENV` | `production` in Docker; let Next.js set this for local development |
-| `SITE_URL` | Exact public origin, e.g. `https://ssl.example.com`, without a path |
+| `SITE_URL` | Exact public origin, without a path; defaults to `https://freessl.run` when `NODE_ENV=production`, otherwise `http://localhost:3000`. Explicit values always take precedence. |
 | `ACME_ENVIRONMENT` | `staging` by default; only `staging` or `production` accepted |
 | `ACME_ACCOUNT_EMAIL` | Operator contact, required for issuance |
 | `ACME_TERMS_AGREED` | `false` until the operator accepts the CA terms |
@@ -80,6 +80,26 @@ Copy `.env.example` to `.env` for Docker deployment and replace its example valu
 | `SUPPORT_EMAIL` | Optional public contact for the privacy page |
 
 Generate a fresh rate-limit secret with `openssl rand -hex 32` and put it in the private environment file. Do not keep the example placeholder. Never expose Redis or the app's internal port directly to the internet in proxy-trust mode.
+
+### Railway and origin errors
+
+For the live FreeSSL deployment, set these variables on the Railway application service, then redeploy:
+
+```dotenv
+NODE_ENV=production
+SITE_URL=https://freessl.run
+```
+
+`SITE_URL` is the website's public origin, not the domain a visitor wants a certificate for. Use the exact browser origin for other deployments. Replace any existing `http://localhost:3000` or example value; an explicit variable overrides the production default. This does not change `ACME_ENVIRONMENT`, which stays on staging until deliberately configured otherwise.
+
+A `403 ORIGIN_DENIED` response with "Please submit this request from the website." means the origin check rejected the request, before DNS validation or certificate issuance. Keep this protection enabled. After redeploying, `/robots.txt` should reference `https://freessl.run/sitemap.xml`. This empty-payload check should return `400 INVALID_REQUEST`, not `403 ORIGIN_DENIED`, and cannot create a certificate order:
+
+```sh
+curl -i https://freessl.run/api/certificates \
+	-H 'Origin: https://freessl.run' \
+	-H 'Sec-Fetch-Site: same-origin' \
+	-H 'Content-Type: application/json' --data '{}'
+```
 
 ## Tests and real staging issuance
 
